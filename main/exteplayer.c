@@ -524,7 +524,7 @@ static int ParseParams(int argc,char* argv[], PlayFiles_t *playbackFiles, int *p
             ffmpeg_av_dict_set("headers", optarg, 0);
             break;
         case 'u':
-            ffmpeg_av_dict_set("user-agent", optarg, 0);
+            ffmpeg_av_dict_set("user_agent", optarg, 0);
             break;
         case 'c':
             printf("For now cookies should be set via headers option!\n");
