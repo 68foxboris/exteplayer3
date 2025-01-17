@@ -45,7 +45,7 @@
 #include "debug.h"
 
 #define DUMP_BOOL(x) 0 == x ? "false"  : "true"
-#define IPTV_MAX_FILE_PATH 1024
+#define IPTV_MAX_FILE_PATH 3096
 
 extern int ffmpeg_av_dict_set(const char *key, const char *value, int flags);
 extern void       aac_software_decoder_set(const int32_t val);
