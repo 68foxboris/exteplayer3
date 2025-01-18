@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <memory.h>
@@ -117,6 +118,45 @@ static char * ass_get_text(char *str)
     while((p_newline = strstr(p_str, "\\N")) != NULL)
         *(p_newline + 1) = 'n';
     return p_str;
+}
+
+static char *mov_get_text(const char *str, int len) {
+    if (!str || len <= 0) {
+        return strdup("");
+    }
+
+    const char *p_str = str;
+    const char *end = str + len;
+
+    while (p_str < end && (!isprint((unsigned char)*p_str) && *p_str != ' ')) {
+        p_str++;
+    }
+
+    if (p_str >= end) {
+        return strdup("");
+    }
+
+    char *output = (char *)malloc(len + 1);
+    if (!output) {
+        return strdup("");
+    }
+
+    char *out_ptr = output;
+
+    while (p_str < end) {
+        if (strncmp(p_str, "\\N", 2) == 0) {
+            *out_ptr++ = '\n';
+            p_str += 2;
+        } else if (isprint((unsigned char)*p_str) || *p_str == ' ') {
+            *out_ptr++ = *p_str++;
+        } else {
+            p_str++;
+        }
+    }
+
+    *out_ptr = '\0';
+
+    return output;
 }
 
 static char * json_string_escape(char *str)
@@ -227,6 +267,8 @@ static int Write(void *_context, void *data)
         subCodecId = SUBTITLE_CODEC_ID_DVB;
     else if (!strncmp("S_GRAPHIC/XSUB", Encoding, 14))
         subCodecId = SUBTITLE_CODEC_ID_XSUB;
+    else if (!strncmp("S_TEXT/MOV", Encoding, 10))
+        subCodecId = SUBTITLE_CODEC_ID_MOV_TEXT;
 
     switch (subCodecId)
     {
@@ -237,6 +279,12 @@ static int Write(void *_context, void *data)
         case SUBTITLE_CODEC_ID_ASS:
             E2iSendMsg("{\"s_a\":{\"id\":%d,\"s\":%"PRId64",\"e\":%"PRId64",\"t\":\"%s\"}}\n", out->trackId, out->pts / 90, out->pts / 90 + out->durationMS, ass_get_text((char *)out->data));
         break;
+        case SUBTITLE_CODEC_ID_MOV_TEXT:{
+            char *text = mov_get_text((char *)out->data, out->len);
+            E2iSendMsg("{\"s_a\":{\"id\":%d,\"s\":%"PRId64",\"e\":%"PRId64",\"t\":\"%s\"}}\n", out->trackId, out->pts / 90, out->pts / 90 + out->durationMS, text);
+            free(text);
+            break;
+        }
         case SUBTITLE_CODEC_ID_PGS:
         case SUBTITLE_CODEC_ID_DVB:
         case SUBTITLE_CODEC_ID_XSUB:
