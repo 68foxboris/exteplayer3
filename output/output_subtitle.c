@@ -120,6 +120,10 @@ static char * ass_get_text(char *str)
     return p_str;
 }
 
+static int is_utf8_continuation(unsigned char c) {
+    return (c & 0xC0) == 0x80;
+}
+
 static char *mov_get_text(const char *str, int len) {
     if (!str || len <= 0) {
         return strdup("");
@@ -128,7 +132,7 @@ static char *mov_get_text(const char *str, int len) {
     const char *p_str = str;
     const char *end = str + len;
 
-    while (p_str < end && (!isprint((unsigned char)*p_str) && *p_str != ' ')) {
+    while (p_str < end && !((unsigned char)*p_str & 0x80) && *p_str != ' ') {
         p_str++;
     }
 
@@ -136,27 +140,65 @@ static char *mov_get_text(const char *str, int len) {
         return strdup("");
     }
 
-    char *output = (char *)malloc(len + 1);
-    if (!output) {
+    char *result = malloc(len + 1);
+    if (!result) {
         return strdup("");
     }
+    char *out_ptr = result;
 
-    char *out_ptr = output;
-
-    while (p_str < end) {
-        if (strncmp(p_str, "\\N", 2) == 0) {
+    for (int i = 0; i < len && p_str[i] != '\0';) {
+        if (p_str[i] == '\\' && i + 1 < len && p_str[i + 1] == 'N') {
             *out_ptr++ = '\n';
-            p_str += 2;
-        } else if (isprint((unsigned char)*p_str) || *p_str == ' ') {
-            *out_ptr++ = *p_str++;
+            i += 2;
+        } else if ((unsigned char)p_str[i] < 0x80 || p_str[i] == ' ') {
+            switch (p_str[i]) {
+                case '"':  *out_ptr++ = '\\'; *out_ptr++ = '"'; break;
+                case '\\': *out_ptr++ = '\\'; *out_ptr++ = '\\'; break;
+                case '\b': *out_ptr++ = '\\'; *out_ptr++ = 'b'; break;
+                case '\f': *out_ptr++ = '\\'; *out_ptr++ = 'f'; break;
+                case '\n': *out_ptr++ = '\\'; *out_ptr++ = 'n'; break;
+                case '\r': *out_ptr++ = '\\'; *out_ptr++ = 'r'; break;
+                case '\t': *out_ptr++ = '\\'; *out_ptr++ = 't'; break;
+                default:   *out_ptr++ = p_str[i];
+            }
+            i++;
         } else {
-            p_str++;
+            int bytes = 0;
+            if ((unsigned char)p_str[i] < 0xC2) {
+                i++;
+                continue;
+            }
+            if ((p_str[i] & 0xF0) == 0xF0) bytes = 4;
+            else if ((p_str[i] & 0xE0) == 0xE0) bytes = 3;
+            else if ((p_str[i] & 0xC0) == 0xC0) bytes = 2;
+            else {
+                i++;
+                continue;
+            }
+
+            if (i + bytes <= len) {
+                int valid = 1;
+                for (int j = 1; j < bytes; j++) {
+                    if (!is_utf8_continuation(p_str[i + j])) {
+                        valid = 0;
+                        break;
+                    }
+                }
+                if (valid) {
+                    memcpy(out_ptr, p_str + i, bytes);
+                    out_ptr += bytes;
+                    i += bytes;
+                } else {
+                    i++;
+                }
+            } else {
+                break;
+            }
         }
     }
-
     *out_ptr = '\0';
 
-    return output;
+    return result;
 }
 
 static char * json_string_escape(char *str)
