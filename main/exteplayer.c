@@ -623,7 +623,7 @@ int main(int argc, char* argv[])
     
     uint32_t linuxDvbBufferSizeMB = 0; 
     
-    char argvBuff[256];
+    char argvBuff[2048];
     memset(argvBuff, '\0', sizeof(argvBuff));
     int commandRetVal = -1;
 
